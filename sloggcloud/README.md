@@ -78,7 +78,6 @@ logger.InfoContext(ctx, "operation started")
   "severity": "INFO",
   "time": "2024-01-01T12:00:00.000Z",
   "msg": "hello",
-  "user": "alice",
   "logging.googleapis.com/trace": "projects/your-project-id/traces/trace-id",
   "logging.googleapis.com/spanId": "span-id",
   "logging.googleapis.com/sourceLocation": {
