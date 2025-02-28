@@ -14,14 +14,14 @@ import (
 
 func TestHandler_Handle(t *testing.T) {
 	tests := []struct {
-		name              string
-		level             slog.Level
-		message           string
-		args              []slog.Attr
-		opts              []sloggcloud.Option
-		setupTrace        func() context.Context
-		want              map[string]interface{}
-		hasSourceLocation bool
+		name               string
+		level              slog.Level
+		message            string
+		args               []slog.Attr
+		opts               []sloggcloud.Option
+		setupTrace         func() context.Context
+		want               map[string]interface{}
+		wantSourceLocation bool
 	}{
 		{
 			name:    "基本的なログ出力",
@@ -37,7 +37,7 @@ func TestHandler_Handle(t *testing.T) {
 				"msg":      "test message",
 				"key":      "value",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 		{
 			name:    "ソース情報付きのログ",
@@ -53,7 +53,7 @@ func TestHandler_Handle(t *testing.T) {
 				"msg":      "message with source",
 				"code":     float64(500),
 			},
-			hasSourceLocation: true,
+			wantSourceLocation: true,
 		},
 		{
 			name:    "プロジェクトIDとトレース情報付きのログ",
@@ -77,7 +77,7 @@ func TestHandler_Handle(t *testing.T) {
 				"logging.googleapis.com/trace":  "projects/test-project/traces/01020304050607080102030405060708",
 				"logging.googleapis.com/spanId": "0102030405060708",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 		// レベルのテストケース
 		{
@@ -96,7 +96,7 @@ func TestHandler_Handle(t *testing.T) {
 				"msg":      "debug message",
 				"key":      "value",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 		{
 			name:    "WARNレベルのログ",
@@ -112,7 +112,7 @@ func TestHandler_Handle(t *testing.T) {
 				"msg":      "warning message",
 				"key":      "value",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 		{
 			name:    "ERRORレベルのログ",
@@ -128,7 +128,7 @@ func TestHandler_Handle(t *testing.T) {
 				"msg":      "error message",
 				"key":      "value",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 	}
 
@@ -154,7 +154,7 @@ func TestHandler_Handle(t *testing.T) {
 
 			// ソース位置情報の検証
 			if sourceLocation, ok := got["logging.googleapis.com/sourceLocation"].(map[string]interface{}); ok {
-				if !tt.hasSourceLocation {
+				if !tt.wantSourceLocation {
 					t.Error("unexpected source location information is included")
 				}
 				if _, ok := sourceLocation["file"].(string); !ok {
@@ -167,7 +167,7 @@ func TestHandler_Handle(t *testing.T) {
 					t.Error("sourceLocation.function is not a string")
 				}
 				delete(got, "logging.googleapis.com/sourceLocation")
-			} else if tt.hasSourceLocation {
+			} else if tt.wantSourceLocation {
 				t.Error("source location information is missing")
 			}
 
