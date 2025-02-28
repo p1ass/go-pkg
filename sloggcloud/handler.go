@@ -15,11 +15,10 @@ import (
 // Google Cloud Logging と互換性のある構造化フォーマットでログを出力します。
 // また、利用可能な場合は OpenTelemetry のトレース ID とスパン ID も含みます。
 type Handler struct {
-	opts    *options
-	attrs   []slog.Attr
-	groups  []string
-	w       io.Writer
-	program string
+	opts   *options
+	attrs  []slog.Attr
+	groups []string
+	w      io.Writer
 }
 
 var _ slog.Handler = (*Handler)(nil)
@@ -32,9 +31,8 @@ func New(w io.Writer, opts ...Option) *Handler {
 	}
 
 	return &Handler{
-		opts:    o,
-		w:       w,
-		program: o.program,
+		opts: o,
+		w:    w,
 	}
 }
 
@@ -78,25 +76,23 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	// OpenTelemetry コンテキストからトレース ID とスパン ID を抽出
-	if h.opts.addTraceInfo {
-		span := trace.SpanFromContext(ctx)
-		if span.SpanContext().IsValid() {
-			traceID := span.SpanContext().TraceID()
-			spanID := span.SpanContext().SpanID()
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().IsValid() {
+		traceID := span.SpanContext().TraceID()
+		spanID := span.SpanContext().SpanID()
 
-			// Google Cloud Logging の要件に従ってトレース ID をフォーマット
-			var traceIDStr string
-			if h.opts.projectID != "" {
-				traceIDStr = fmt.Sprintf("projects/%s/traces/%s", h.opts.projectID, traceID.String())
-			} else {
-				traceIDStr = traceID.String()
-			}
-
-			attrs = append(attrs,
-				slog.String("logging.googleapis.com/trace", traceIDStr),
-				slog.String("logging.googleapis.com/spanId", spanID.String()),
-			)
+		// Google Cloud Logging の要件に従ってトレース ID をフォーマット
+		var traceIDStr string
+		if h.opts.projectID != "" {
+			traceIDStr = fmt.Sprintf("projects/%s/traces/%s", h.opts.projectID, traceID.String())
+		} else {
+			traceIDStr = traceID.String()
 		}
+
+		attrs = append(attrs,
+			slog.String("logging.googleapis.com/trace", traceIDStr),
+			slog.String("logging.googleapis.com/spanId", spanID.String()),
+		)
 	}
 
 	// 事前定義された属性を追加

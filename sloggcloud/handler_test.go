@@ -12,13 +12,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TestHandler_Handle は Handler の Handle メソッドをテストします。
 func TestHandler_Handle(t *testing.T) {
 	tests := []struct {
 		name              string
 		level             slog.Level
 		message           string
-		attrs             []slog.Attr
+		args              []any
 		opts              []sloggcloud.Option
 		setupTrace        func() context.Context
 		want              map[string]interface{}
@@ -28,7 +27,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "基本的なログ出力",
 			level:   slog.LevelInfo,
 			message: "test message",
-			attrs:   []slog.Attr{slog.String("key", "value")},
+			args:    []any{"key", "value"},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -44,7 +43,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "ソース情報付きのログ",
 			level:   slog.LevelInfo,
 			message: "message with source",
-			attrs:   []slog.Attr{slog.Int("code", 500)},
+			args:    []any{"code", 500},
 			opts:    []sloggcloud.Option{sloggcloud.WithSource(true)},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -60,7 +59,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "プロジェクトIDとトレース情報付きのログ",
 			level:   slog.LevelInfo,
 			message: "message with project ID",
-			attrs:   []slog.Attr{},
+			args:    []any{},
 			opts:    []sloggcloud.Option{sloggcloud.WithProjectID("test-project")},
 			setupTrace: func() context.Context {
 				traceID, _ := trace.TraceIDFromHex("01020304050607080102030405060708")
@@ -80,28 +79,12 @@ func TestHandler_Handle(t *testing.T) {
 			},
 			hasSourceLocation: false,
 		},
-		{
-			name:    "グループ化された属性を持つログ",
-			level:   slog.LevelInfo,
-			message: "message with group",
-			attrs:   []slog.Attr{slog.String("in_group", "value")},
-			opts:    []sloggcloud.Option{},
-			setupTrace: func() context.Context {
-				return context.Background()
-			},
-			want: map[string]interface{}{
-				"severity": "INFO",
-				"msg":      "message with group",
-				"in_group": "value",
-			},
-			hasSourceLocation: false,
-		},
 		// レベルのテストケース
 		{
 			name:    "DEBUGレベルのログ",
 			level:   slog.LevelDebug,
 			message: "debug message",
-			attrs:   []slog.Attr{slog.String("key", "value")},
+			args:    []any{"key", "value"},
 			opts: []sloggcloud.Option{
 				sloggcloud.WithLevel(slog.LevelDebug),
 			},
@@ -119,7 +102,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "WARNレベルのログ",
 			level:   slog.LevelWarn,
 			message: "warning message",
-			attrs:   []slog.Attr{slog.String("key", "value")},
+			args:    []any{"key", "value"},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -135,7 +118,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "ERRORレベルのログ",
 			level:   slog.LevelError,
 			message: "error message",
-			attrs:   []slog.Attr{slog.String("key", "value")},
+			args:    []any{"key", "value"},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -153,15 +136,10 @@ func TestHandler_Handle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			handler := sloggcloud.New(&buf, tt.opts...)
+			logger := slog.New(handler)
 
 			ctx := tt.setupTrace()
-
-			logger := slog.New(handler)
-			if len(tt.attrs) > 0 {
-				attrHandler := logger.Handler().WithAttrs(tt.attrs)
-				logger = slog.New(attrHandler)
-			}
-			logger.Log(ctx, tt.level, tt.message)
+			logger.Log(ctx, tt.level, tt.message, tt.args...)
 
 			var got map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
@@ -188,11 +166,90 @@ func TestHandler_Handle(t *testing.T) {
 				if _, ok := sourceLocation["function"].(string); !ok {
 					t.Error("sourceLocation.function が文字列ではありません")
 				}
-				// 実際の値は環境依存なので、検証から除外
 				delete(got, "logging.googleapis.com/sourceLocation")
 			} else if tt.hasSourceLocation {
 				t.Error("ソース位置情報が含まれていません")
 			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("出力が異なります (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestHandler_WithAttrs(t *testing.T) {
+	tests := []struct {
+		name              string
+		level             slog.Level
+		message           string
+		attrs             []slog.Attr
+		opts              []sloggcloud.Option
+		setupTrace        func() context.Context
+		want              map[string]interface{}
+		hasSourceLocation bool
+	}{
+		{
+			name:    "WithAttrsで属性を追加",
+			level:   slog.LevelInfo,
+			message: "message with attrs",
+			attrs: []slog.Attr{
+				slog.String("service", "test-service"),
+			},
+			opts: []sloggcloud.Option{},
+			setupTrace: func() context.Context {
+				return context.Background()
+			},
+			want: map[string]interface{}{
+				"severity": "INFO",
+				"msg":      "message with attrs",
+				"service":  "test-service",
+			},
+			hasSourceLocation: false,
+		},
+		{
+			name:    "WithAttrsで複数回属性を追加",
+			level:   slog.LevelInfo,
+			message: "message with multiple attrs",
+			attrs: []slog.Attr{
+				slog.String("service", "test-service"),
+				slog.Int("version", 1),
+				slog.String("environment", "test"),
+			},
+			opts: []sloggcloud.Option{},
+			setupTrace: func() context.Context {
+				return context.Background()
+			},
+			want: map[string]interface{}{
+				"severity":    "INFO",
+				"msg":         "message with multiple attrs",
+				"service":     "test-service",
+				"version":     float64(1),
+				"environment": "test",
+			},
+			hasSourceLocation: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			handler := sloggcloud.New(&buf, tt.opts...)
+			logger := slog.New(handler.WithAttrs(tt.attrs))
+
+			ctx := tt.setupTrace()
+			logger.Log(ctx, tt.level, tt.message)
+
+			var got map[string]interface{}
+			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+				t.Fatalf("JSONのパースに失敗: %v", err)
+			}
+
+			// time フィールドの検証
+			if _, ok := got["time"].(string); !ok {
+				t.Error("time フィールドが文字列ではありません")
+			}
+			delete(got, "time")
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("出力が異なります (-want +got):\n%s", diff)

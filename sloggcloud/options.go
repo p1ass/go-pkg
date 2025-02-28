@@ -4,60 +4,42 @@ import (
 	"log/slog"
 )
 
-// options contains configuration options for the Handler.
+// options はハンドラーの設定オプションを保持する構造体です。
 type options struct {
-	level        slog.Level
-	addSource    bool
-	addTraceInfo bool
-	projectID    string
-	program      string
+	level     slog.Level
+	addSource bool
+	projectID string
 }
 
-// Option is a function that configures the Handler.
+// Option はハンドラーを設定するための関数型です。
 type Option func(*options)
 
-// defaultOptions returns the default options.
+// defaultOptions はデフォルトのオプション値を返します。
 func defaultOptions() *options {
 	return &options{
-		level:        slog.LevelInfo,
-		addSource:    false,
-		addTraceInfo: true,
-		projectID:    "",
-		program:      "",
+		level:     slog.LevelInfo,
+		addSource: false,
+		projectID: "",
 	}
 }
 
-// WithLevel sets the minimum level to log.
+// WithLevel は最小ログレベルを設定します。
 func WithLevel(level slog.Level) Option {
 	return func(o *options) {
 		o.level = level
 	}
 }
 
-// WithSource enables source code location in logs.
+// WithSource はソースコードの位置情報の出力を有効にします。
 func WithSource(enabled bool) Option {
 	return func(o *options) {
 		o.addSource = enabled
 	}
 }
 
-// WithTraceInfo enables adding trace and span IDs to logs.
-func WithTraceInfo(enabled bool) Option {
-	return func(o *options) {
-		o.addTraceInfo = enabled
-	}
-}
-
-// WithProjectID sets the Google Cloud project ID for trace formatting.
+// WithProjectID は Google Cloud Project ID を設定します。
 func WithProjectID(projectID string) Option {
 	return func(o *options) {
 		o.projectID = projectID
-	}
-}
-
-// WithProgram sets the program name.
-func WithProgram(program string) Option {
-	return func(o *options) {
-		o.program = program
 	}
 }
