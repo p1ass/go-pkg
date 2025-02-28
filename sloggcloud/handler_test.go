@@ -180,14 +180,14 @@ func TestHandler_Handle(t *testing.T) {
 
 func TestHandler_WithAttrs(t *testing.T) {
 	tests := []struct {
-		name              string
-		level             slog.Level
-		message           string
-		attrs             []slog.Attr
-		opts              []sloggcloud.Option
-		setupTrace        func() context.Context
-		want              map[string]interface{}
-		hasSourceLocation bool
+		name               string
+		level              slog.Level
+		message            string
+		attrs              []slog.Attr
+		opts               []sloggcloud.Option
+		setupTrace         func() context.Context
+		want               map[string]interface{}
+		wantSourceLocation bool
 	}{
 		{
 			name:    "WithAttrsで属性を追加",
@@ -205,7 +205,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 				"msg":      "message with attrs",
 				"service":  "test-service",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 		{
 			name:    "WithAttrsで複数回属性を追加",
@@ -227,7 +227,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 				"version":     float64(1),
 				"environment": "test",
 			},
-			hasSourceLocation: false,
+			wantSourceLocation: false,
 		},
 	}
 
