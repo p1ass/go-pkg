@@ -43,7 +43,6 @@ func (h *Handler) Enabled(_ context.Context, level slog.Level) bool {
 
 // Handle はレコードを処理します。
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
-	// 新しいslogロガーを作成
 	logger := slog.New(slog.NewJSONHandler(h.w, &slog.HandlerOptions{
 		Level: h.opts.level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -55,10 +54,8 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		},
 	}))
 
-	// 属性を格納するスライスを作成
 	attrs := make([]slog.Attr, 0)
 
-	// ソース位置情報が有効な場合は追加
 	if h.opts.addSource {
 		var frame runtime.Frame
 		pc := r.PC
@@ -75,7 +72,6 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 
-	// OpenTelemetry コンテキストからトレース ID とスパン ID を抽出
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().IsValid() {
 		traceID := span.SpanContext().TraceID()
@@ -95,20 +91,16 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		)
 	}
 
-	// 事前定義された属性を追加
 	if len(h.attrs) > 0 {
 		attrs = append(attrs, h.attrs...)
 	}
 
-	// レコードの属性を追加
 	r.Attrs(func(attr slog.Attr) bool {
 		attrs = append(attrs, attr)
 		return true
 	})
 
-	// グループ化された属性を作成
 	if len(h.groups) > 0 {
-		// 最後のグループから順に属性をネスト
 		var values []any
 		for _, attr := range attrs {
 			values = append(values, attr)
@@ -120,7 +112,6 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		attrs = []slog.Attr{groupedAttrs[0].(slog.Attr)}
 	}
 
-	// ログを出力
 	logger.LogAttrs(ctx, r.Level, r.Message, attrs...)
 	return nil
 }
