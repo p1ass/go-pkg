@@ -161,6 +161,7 @@ func TestHandler_Handle(t *testing.T) {
 				if !tt.wantSourceLocation {
 					t.Error("unexpected source location information is included")
 				}
+				t.Log(sourceLocation)
 				if _, ok := sourceLocation["file"].(string); !ok {
 					t.Error("sourceLocation.file is not a string")
 				}
