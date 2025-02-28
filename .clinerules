@@ -116,7 +116,8 @@
 - テストコードはTable Driven Testsの形式で記述してください
     - 実装は `gotests` で生成されるテストコードと同じ命名を利用してください
 - テストコードはDAMPなコードを書くことを心がけてください
-- 構造体の値の一致を検証するときには reflect packageを使わず google/go-cmp packageを使うようにしてください。
+- 構造体の値の一致を検証するときには reflect packageを使わず google/go-cmp packageを使うようにしてください
+- テストケースの名前は日本語で記述してください
 ---
 
 # プロジェクト構成
