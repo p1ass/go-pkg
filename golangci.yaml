@@ -1,0 +1,31 @@
+run:
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  concurrency: 0 # CPUの数に応じて自動的に並列化される
+output:
+  sort-results: true
+
+linters:
+  # デフォルトで有効化されているものに加えて追加で有効化する
+  enable:
+    - bodyclose
+    - errname
+    - goimports
+    - noctx
+    - usestdlibvars
+    - misspell
+    - goimports
+    - exhaustive
+    - exhaustruct
+    - gocognit
+    - gocyclo
+    - gosec
+    - wrapcheck
+    - revive
+    - errorlint
+    - testpackage
+linters-settings:
+  misspell:
+    ignore-words:
+      - sloggcloud
