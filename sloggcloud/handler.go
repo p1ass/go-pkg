@@ -106,6 +106,20 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
+	// グループ化された属性を作成
+	if len(h.groups) > 0 {
+		// 最後のグループから順に属性をネスト
+		var values []any
+		for _, attr := range attrs {
+			values = append(values, attr)
+		}
+		groupedAttrs := values
+		for i := len(h.groups) - 1; i >= 0; i-- {
+			groupedAttrs = []any{slog.Group(h.groups[i], groupedAttrs...)}
+		}
+		attrs = []slog.Attr{groupedAttrs[0].(slog.Attr)}
+	}
+
 	// ログを出力
 	logger.LogAttrs(ctx, r.Level, r.Message, attrs...)
 	return nil

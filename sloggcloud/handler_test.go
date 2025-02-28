@@ -261,3 +261,104 @@ func TestHandler_WithAttrs(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_WithGroup(t *testing.T) {
+	tests := []struct {
+		name               string
+		level              slog.Level
+		message            string
+		setupGroups        func(h *sloggcloud.Handler) slog.Handler
+		args               []slog.Attr
+		opts               []sloggcloud.Option
+		want               map[string]interface{}
+		wantSourceLocation bool
+	}{
+		{
+			name:    "単一のグループを指定",
+			level:   slog.LevelInfo,
+			message: "message with group",
+			setupGroups: func(h *sloggcloud.Handler) slog.Handler {
+				return h.WithGroup("server")
+			},
+			args: []slog.Attr{
+				slog.String("host", "example.com"),
+			},
+			opts: []sloggcloud.Option{sloggcloud.WithSource(false)},
+			want: map[string]interface{}{
+				"severity": "INFO",
+				"msg":      "message with group",
+				"server": map[string]interface{}{
+					"host": "example.com",
+				},
+			},
+			wantSourceLocation: false,
+		},
+		{
+			name:    "空のグループ名を指定",
+			level:   slog.LevelInfo,
+			message: "message with empty group",
+			setupGroups: func(h *sloggcloud.Handler) slog.Handler {
+				return h.WithGroup("")
+			},
+			args: []slog.Attr{
+				slog.String("key", "value"),
+			},
+			opts: []sloggcloud.Option{sloggcloud.WithSource(false)},
+			want: map[string]interface{}{
+				"severity": "INFO",
+				"msg":      "message with empty group",
+				"key":      "value",
+			},
+			wantSourceLocation: false,
+		},
+		{
+			name:    "ネストしたグループを指定",
+			level:   slog.LevelInfo,
+			message: "message with nested groups",
+			setupGroups: func(h *sloggcloud.Handler) slog.Handler {
+				return h.WithGroup("server").WithGroup("network")
+			},
+			args: []slog.Attr{
+				slog.String("ip", "192.168.1.1"),
+				slog.Int("port", 8080),
+			},
+			opts: []sloggcloud.Option{sloggcloud.WithSource(false)},
+			want: map[string]interface{}{
+				"severity": "INFO",
+				"msg":      "message with nested groups",
+				"server": map[string]interface{}{
+					"network": map[string]interface{}{
+						"ip":   "192.168.1.1",
+						"port": float64(8080),
+					},
+				},
+			},
+			wantSourceLocation: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			handler := sloggcloud.New(&buf, tt.opts...)
+			logger := slog.New(tt.setupGroups(handler))
+
+			logger.LogAttrs(context.Background(), tt.level, tt.message, tt.args...)
+
+			var got map[string]interface{}
+			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+				t.Fatalf("failed to parse JSON: %v", err)
+			}
+
+			// time フィールドの検証
+			if _, ok := got["time"].(string); !ok {
+				t.Error("time field is not a string")
+			}
+			delete(got, "time")
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
