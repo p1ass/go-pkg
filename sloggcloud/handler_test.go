@@ -17,7 +17,7 @@ func TestHandler_Handle(t *testing.T) {
 		name              string
 		level             slog.Level
 		message           string
-		args              []any
+		args              []slog.Attr
 		opts              []sloggcloud.Option
 		setupTrace        func() context.Context
 		want              map[string]interface{}
@@ -27,7 +27,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "基本的なログ出力",
 			level:   slog.LevelInfo,
 			message: "test message",
-			args:    []any{"key", "value"},
+			args:    []slog.Attr{slog.String("key", "value")},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -43,7 +43,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "ソース情報付きのログ",
 			level:   slog.LevelInfo,
 			message: "message with source",
-			args:    []any{"code", 500},
+			args:    []slog.Attr{slog.Int("code", 500)},
 			opts:    []sloggcloud.Option{sloggcloud.WithSource(true)},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -59,7 +59,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "プロジェクトIDとトレース情報付きのログ",
 			level:   slog.LevelInfo,
 			message: "message with project ID",
-			args:    []any{},
+			args:    []slog.Attr{},
 			opts:    []sloggcloud.Option{sloggcloud.WithProjectID("test-project")},
 			setupTrace: func() context.Context {
 				traceID, _ := trace.TraceIDFromHex("01020304050607080102030405060708")
@@ -84,7 +84,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "DEBUGレベルのログ",
 			level:   slog.LevelDebug,
 			message: "debug message",
-			args:    []any{"key", "value"},
+			args:    []slog.Attr{slog.String("key", "value")},
 			opts: []sloggcloud.Option{
 				sloggcloud.WithLevel(slog.LevelDebug),
 			},
@@ -102,7 +102,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "WARNレベルのログ",
 			level:   slog.LevelWarn,
 			message: "warning message",
-			args:    []any{"key", "value"},
+			args:    []slog.Attr{slog.String("key", "value")},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -118,7 +118,7 @@ func TestHandler_Handle(t *testing.T) {
 			name:    "ERRORレベルのログ",
 			level:   slog.LevelError,
 			message: "error message",
-			args:    []any{"key", "value"},
+			args:    []slog.Attr{slog.String("key", "value")},
 			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -139,40 +139,40 @@ func TestHandler_Handle(t *testing.T) {
 			logger := slog.New(handler)
 
 			ctx := tt.setupTrace()
-			logger.Log(ctx, tt.level, tt.message, tt.args...)
+			logger.LogAttrs(ctx, tt.level, tt.message, tt.args...)
 
 			var got map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
-				t.Fatalf("JSONのパースに失敗: %v", err)
+				t.Fatalf("failed to parse JSON: %v", err)
 			}
 
 			// time フィールドの検証
 			if _, ok := got["time"].(string); !ok {
-				t.Error("time フィールドが文字列ではありません")
+				t.Error("time field is not a string")
 			}
 			delete(got, "time")
 
 			// ソース位置情報の検証
 			if sourceLocation, ok := got["logging.googleapis.com/sourceLocation"].(map[string]interface{}); ok {
 				if !tt.hasSourceLocation {
-					t.Error("予期しないソース位置情報が含まれています")
+					t.Error("unexpected source location information is included")
 				}
 				if _, ok := sourceLocation["file"].(string); !ok {
-					t.Error("sourceLocation.file が文字列ではありません")
+					t.Error("sourceLocation.file is not a string")
 				}
 				if _, ok := sourceLocation["line"].(float64); !ok {
-					t.Error("sourceLocation.line が数値ではありません")
+					t.Error("sourceLocation.line is not a number")
 				}
 				if _, ok := sourceLocation["function"].(string); !ok {
-					t.Error("sourceLocation.function が文字列ではありません")
+					t.Error("sourceLocation.function is not a string")
 				}
 				delete(got, "logging.googleapis.com/sourceLocation")
 			} else if tt.hasSourceLocation {
-				t.Error("ソース位置情報が含まれていません")
+				t.Error("source location information is missing")
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("出力が異なります (-want +got):\n%s", diff)
+				t.Errorf("output mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -238,21 +238,21 @@ func TestHandler_WithAttrs(t *testing.T) {
 			logger := slog.New(handler.WithAttrs(tt.attrs))
 
 			ctx := tt.setupTrace()
-			logger.Log(ctx, tt.level, tt.message)
+			logger.LogAttrs(ctx, tt.level, tt.message)
 
 			var got map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
-				t.Fatalf("JSONのパースに失敗: %v", err)
+				t.Fatalf("failed to parse JSON: %v", err)
 			}
 
 			// time フィールドの検証
 			if _, ok := got["time"].(string); !ok {
-				t.Error("time フィールドが文字列ではありません")
+				t.Error("time field is not a string")
 			}
 			delete(got, "time")
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("出力が異なります (-want +got):\n%s", diff)
+				t.Errorf("output mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
