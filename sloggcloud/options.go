@@ -18,7 +18,7 @@ type Option func(*options)
 func defaultOptions() *options {
 	return &options{
 		level:     slog.LevelInfo,
-		addSource: false,
+		addSource: true,
 		projectID: "",
 	}
 }

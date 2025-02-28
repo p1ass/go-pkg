@@ -28,7 +28,7 @@ func TestHandler_Handle(t *testing.T) {
 			level:   slog.LevelInfo,
 			message: "test message",
 			args:    []slog.Attr{slog.String("key", "value")},
-			opts:    []sloggcloud.Option{},
+			opts:    []sloggcloud.Option{sloggcloud.WithSource(false)},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},
@@ -44,7 +44,7 @@ func TestHandler_Handle(t *testing.T) {
 			level:   slog.LevelInfo,
 			message: "message with source",
 			args:    []slog.Attr{slog.Int("code", 500)},
-			opts:    []sloggcloud.Option{sloggcloud.WithSource(true)},
+			opts:    []sloggcloud.Option{},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},
@@ -60,7 +60,10 @@ func TestHandler_Handle(t *testing.T) {
 			level:   slog.LevelInfo,
 			message: "message with project ID",
 			args:    []slog.Attr{},
-			opts:    []sloggcloud.Option{sloggcloud.WithProjectID("test-project")},
+			opts: []sloggcloud.Option{
+				sloggcloud.WithProjectID("test-project"),
+				sloggcloud.WithSource(false),
+			},
 			setupTrace: func() context.Context {
 				traceID, _ := trace.TraceIDFromHex("01020304050607080102030405060708")
 				spanID, _ := trace.SpanIDFromHex("0102030405060708")
@@ -87,6 +90,7 @@ func TestHandler_Handle(t *testing.T) {
 			args:    []slog.Attr{slog.String("key", "value")},
 			opts: []sloggcloud.Option{
 				sloggcloud.WithLevel(slog.LevelDebug),
+				sloggcloud.WithSource(false),
 			},
 			setupTrace: func() context.Context {
 				return context.Background()
@@ -103,7 +107,7 @@ func TestHandler_Handle(t *testing.T) {
 			level:   slog.LevelWarn,
 			message: "warning message",
 			args:    []slog.Attr{slog.String("key", "value")},
-			opts:    []sloggcloud.Option{},
+			opts:    []sloggcloud.Option{sloggcloud.WithSource(false)},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},
@@ -119,7 +123,7 @@ func TestHandler_Handle(t *testing.T) {
 			level:   slog.LevelError,
 			message: "error message",
 			args:    []slog.Attr{slog.String("key", "value")},
-			opts:    []sloggcloud.Option{},
+			opts:    []sloggcloud.Option{sloggcloud.WithSource(false)},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},
@@ -196,7 +200,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 			attrs: []slog.Attr{
 				slog.String("service", "test-service"),
 			},
-			opts: []sloggcloud.Option{},
+			opts: []sloggcloud.Option{sloggcloud.WithSource(false)},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},
@@ -216,7 +220,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 				slog.Int("version", 1),
 				slog.String("environment", "test"),
 			},
-			opts: []sloggcloud.Option{},
+			opts: []sloggcloud.Option{sloggcloud.WithSource(false)},
 			setupTrace: func() context.Context {
 				return context.Background()
 			},

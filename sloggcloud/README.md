@@ -68,7 +68,7 @@ logger.InfoContext(ctx, "operation started")
 | オプション | 説明 | デフォルト値 |
 |------------|------|--------------|
 | `WithLevel` | 最小ログレベルを設定 | `slog.LevelInfo` |
-| `WithSource` | ソースコードの位置情報の出力を有効化 | `false` |
+| `WithSource` | ソースコードの位置情報の出力を有効化 | `true` |
 | `WithProjectID` | Google Cloud Project ID を設定 | `""` |
 
 ## 出力形式
