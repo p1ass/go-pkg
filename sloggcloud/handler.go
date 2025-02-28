@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"runtime"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -22,6 +21,8 @@ type Handler struct {
 	w       io.Writer
 	program string
 }
+
+var _ slog.Handler = (*Handler)(nil)
 
 // New は Google Cloud Logging 用の新しい Handler を作成します。
 func New(w io.Writer, opts ...Option) *Handler {
@@ -99,35 +100,15 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	// 事前定義された属性を追加
-	if len(h.attrs) > 0 || len(h.groups) > 0 {
-		attrMap := make(map[string]interface{})
-		for _, attr := range h.attrs {
-			addAttr(attrMap, h.groups, attr)
-		}
-		attrs = append(attrs, slog.Any("attributes", attrMap))
+	if len(h.attrs) > 0 {
+		attrs = append(attrs, h.attrs...)
 	}
 
 	// レコードの属性を追加
-	recordAttrs := make(map[string]interface{})
 	r.Attrs(func(attr slog.Attr) bool {
-		addAttr(recordAttrs, h.groups, attr)
+		attrs = append(attrs, attr)
 		return true
 	})
-	if len(recordAttrs) > 0 {
-		if len(h.attrs) == 0 && len(h.groups) == 0 {
-			attrs = append(attrs, slog.Any("attributes", recordAttrs))
-		} else {
-			// 既存の attributes に追加
-			lastAttr := &attrs[len(attrs)-1]
-			if lastAttr.Key == "attributes" {
-				if existingAttrs, ok := lastAttr.Value.Any().(map[string]interface{}); ok {
-					for k, v := range recordAttrs {
-						existingAttrs[k] = v
-					}
-				}
-			}
-		}
-	}
 
 	// ログを出力
 	logger.LogAttrs(ctx, r.Level, r.Message, attrs...)
@@ -156,7 +137,6 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 	return &h2
 }
 
-// levelToSeverity は slog.Level を Google Cloud Logging の重要度に変換します。
 func levelToSeverity(level slog.Level) string {
 	switch {
 	case level >= slog.LevelError:
@@ -167,84 +147,5 @@ func levelToSeverity(level slog.Level) string {
 		return "INFO"
 	default:
 		return "DEBUG"
-	}
-}
-
-// addAttr は属性を属性マップに追加します。
-func addAttr(attrs map[string]interface{}, groups []string, attr slog.Attr) {
-	if attr.Equal(slog.Attr{}) {
-		return
-	}
-
-	// グループを処理
-	if len(groups) > 0 {
-		// グループ用のネストされたマップを作成
-		current := attrs
-		for _, g := range groups[:len(groups)-1] {
-			v, ok := current[g]
-			if !ok {
-				v = make(map[string]interface{})
-				current[g] = v
-			}
-
-			next, ok := v.(map[string]interface{})
-			if !ok {
-				// 値がマップでない場合は新しいマップを作成
-				next = make(map[string]interface{})
-				current[g] = next
-			}
-			current = next
-		}
-
-		// 最も内側のグループに属性を追加
-		lastGroup := groups[len(groups)-1]
-		v, ok := current[lastGroup]
-		if !ok {
-			v = make(map[string]interface{})
-			current[lastGroup] = v
-		}
-
-		innerMap, ok := v.(map[string]interface{})
-		if !ok {
-			innerMap = make(map[string]interface{})
-			current[lastGroup] = innerMap
-		}
-
-		innerMap[attr.Key] = attrValue(attr.Value)
-		return
-	}
-
-	// グループがない場合は直接属性マップに追加
-	attrs[attr.Key] = attrValue(attr.Value)
-}
-
-// attrValue は slog.Value を JSON マーシャリングに適した Go の値に変換します。
-func attrValue(v slog.Value) interface{} {
-	switch v.Kind() {
-	case slog.KindBool:
-		return v.Bool()
-	case slog.KindDuration:
-		return v.Duration().String()
-	case slog.KindFloat64:
-		return v.Float64()
-	case slog.KindInt64:
-		return v.Int64()
-	case slog.KindString:
-		return v.String()
-	case slog.KindTime:
-		return v.Time().Format(time.RFC3339Nano)
-	case slog.KindUint64:
-		return v.Uint64()
-	case slog.KindGroup:
-		attrs := v.Group()
-		m := make(map[string]interface{}, len(attrs))
-		for _, attr := range attrs {
-			m[attr.Key] = attrValue(attr.Value)
-		}
-		return m
-	case slog.KindLogValuer:
-		return attrValue(v.LogValuer().LogValue())
-	default:
-		return fmt.Sprintf("%v", v)
 	}
 }

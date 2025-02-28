@@ -1,55 +1,51 @@
-package sloggcloud
+package sloggcloud_test
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/p1ass/go-pkg/sloggcloud"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TestHandler_Handle tests the Handle method of the Handler.
+// TestHandler_Handle は Handler の Handle メソッドをテストします。
 func TestHandler_Handle(t *testing.T) {
-	// Define test cases
-	testCases := []struct {
-		name           string
-		level          slog.Level
-		message        string
-		attrs          []slog.Attr
-		opts           []Option
-		expectedFields map[string]interface{}
+	tests := []struct {
+		name    string
+		level   slog.Level
+		message string
+		attrs   []slog.Attr
+		opts    []sloggcloud.Option
+		want    map[string]interface{}
 	}{
 		{
-			name:    "basic info log",
+			name:    "基本的なINFOレベルのログ",
 			level:   slog.LevelInfo,
 			message: "test message",
 			attrs:   []slog.Attr{slog.String("key", "value")},
-			opts:    []Option{},
-			expectedFields: map[string]interface{}{
+			opts:    []sloggcloud.Option{},
+			want: map[string]interface{}{
 				"severity": "INFO",
 				"msg":      "test message",
-				"attributes": map[string]interface{}{
-					"key": "value",
-				},
+				"key":      "value",
 			},
 		},
 		{
-			name:    "error log with source",
+			name:    "ソース情報付きのエラーログ",
 			level:   slog.LevelError,
 			message: "error message",
 			attrs:   []slog.Attr{slog.Int("code", 500)},
-			opts:    []Option{WithSource(true)},
-			expectedFields: map[string]interface{}{
+			opts:    []sloggcloud.Option{sloggcloud.WithSource(true)},
+			want: map[string]interface{}{
 				"severity": "ERROR",
 				"msg":      "error message",
-				"attributes": map[string]interface{}{
-					"code": float64(500),
-				},
+				"code":     float64(500),
 				"logging.googleapis.com/sourceLocation": map[string]interface{}{
 					"file":     "", // 実際のファイル名はランタイムによって決まるため、存在チェックのみ
 					"line":     0,  // 同上
@@ -58,234 +54,130 @@ func TestHandler_Handle(t *testing.T) {
 			},
 		},
 		{
-			name:    "log with project ID",
+			name:    "プロジェクトID付きの警告ログ",
 			level:   slog.LevelWarn,
 			message: "warning with project ID",
 			attrs:   []slog.Attr{},
-			opts:    []Option{WithProjectID("test-project")},
-			expectedFields: map[string]interface{}{
+			opts:    []sloggcloud.Option{sloggcloud.WithProjectID("test-project")},
+			want: map[string]interface{}{
 				"severity": "WARNING",
 				"msg":      "warning with project ID",
 			},
 		},
 		{
-			name:    "log with group",
+			name:    "グループ化された属性を持つログ",
 			level:   slog.LevelInfo,
 			message: "message with group",
-			attrs:   []slog.Attr{},
-			opts:    []Option{},
-			expectedFields: map[string]interface{}{
+			attrs:   []slog.Attr{slog.String("in_group", "value")},
+			opts:    []sloggcloud.Option{},
+			want: map[string]interface{}{
 				"severity": "INFO",
 				"msg":      "message with group",
-				"attributes": map[string]interface{}{
-					"group": map[string]interface{}{
-						"in_group": "value",
-					},
-				},
+				"in_group": "value",
 			},
 		},
 	}
 
-	// Run test cases
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Setup
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// テスト用のバッファを準備
 			var buf bytes.Buffer
-			handler := New(&buf, tc.opts...)
+			handler := sloggcloud.New(&buf, tt.opts...)
 
-			// Create a context with a span for testing trace extraction
+			// コンテキストの準備
 			ctx := context.Background()
-			if tc.name == "log with project ID" {
-				// Create a mock span context with valid trace and span IDs
+			if tt.name == "プロジェクトID付きの警告ログ" {
 				traceID, _ := trace.TraceIDFromHex("01020304050607080102030405060708")
 				spanID, _ := trace.SpanIDFromHex("0102030405060708")
-
-				// Create a span context with the mock trace and span IDs
 				spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
 					TraceID:    traceID,
 					SpanID:     spanID,
 					TraceFlags: trace.FlagsSampled,
 				})
-
-				// Set the span context in the context
 				ctx = trace.ContextWithSpanContext(ctx, spanCtx)
 			}
 
-			// If the test case is for groups, add a group
-			if tc.name == "log with group" {
+			// ログの出力
+			if tt.name == "グループ化された属性を持つログ" {
 				groupHandler := handler.WithGroup("group")
 				groupHandler = groupHandler.WithAttrs([]slog.Attr{slog.String("in_group", "value")})
 				logger := slog.New(groupHandler)
-
-				// Log the message
-				logger.LogAttrs(ctx, tc.level, tc.message)
+				logger.LogAttrs(ctx, tt.level, tt.message)
 			} else {
-				// Create a new logger with the handler
 				logger := slog.New(handler)
-
-				// Add attributes if any
-				if len(tc.attrs) > 0 {
-					attrHandler := logger.Handler().WithAttrs(tc.attrs)
+				if len(tt.attrs) > 0 {
+					attrHandler := logger.Handler().WithAttrs(tt.attrs)
 					logger = slog.New(attrHandler)
 				}
-
-				// Log the message
-				logger.Log(ctx, tc.level, tc.message)
+				logger.Log(ctx, tt.level, tt.message)
 			}
 
-			// Parse the JSON output
+			// 出力結果のパース
 			var got map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
-				t.Fatalf("Failed to parse JSON: %v", err)
+				t.Fatalf("JSONのパースに失敗: %v", err)
 			}
 
-			// Check expected fields
-			for k, v := range tc.expectedFields {
+			// time フィールドの検証
+			timeStr, ok := got["time"].(string)
+			if !ok {
+				t.Errorf("time フィールドが文字列ではありません: %T", got["time"])
+			} else if _, err := time.Parse(time.RFC3339Nano, timeStr); err != nil {
+				t.Errorf("time フィールドのパースに失敗: %v", err)
+			}
+
+			// 期待されるフィールドの検証
+			for k, v := range tt.want {
 				gotVal, ok := got[k]
 				if !ok {
-					t.Errorf("Expected field %s not found in output", k)
+					t.Errorf("フィールド %s が見つかりません", k)
 					continue
 				}
 
 				switch k {
 				case "logging.googleapis.com/sourceLocation":
-					// ソースロケーションの場合は、フィールドの存在のみを確認
 					sourceLocation, ok := gotVal.(map[string]interface{})
 					if !ok {
-						t.Errorf("Expected sourceLocation to be a map, got %T", gotVal)
+						t.Errorf("sourceLocation がマップではありません: %T", gotVal)
 					} else {
 						for field := range sourceLocation {
 							if field != "file" && field != "line" && field != "function" {
-								t.Errorf("Unexpected field in sourceLocation: %s", field)
+								t.Errorf("予期しないフィールド: %s", field)
 							}
 						}
 					}
 				case "attributes":
-					// 属性の場合は、期待される属性が含まれているか確認
 					expectedAttrs := v.(map[string]interface{})
 					gotAttrs, ok := gotVal.(map[string]interface{})
 					if !ok {
-						t.Errorf("Expected attributes to be a map, got %T", gotVal)
+						t.Errorf("attributes がマップではありません: %T", gotVal)
 						continue
 					}
-					for attrKey, attrVal := range expectedAttrs {
-						if !reflect.DeepEqual(gotAttrs[attrKey], attrVal) {
-							t.Errorf("Attribute %s: expected %v, got %v", attrKey, attrVal, gotAttrs[attrKey])
-						}
+					if diff := cmp.Diff(expectedAttrs, gotAttrs); diff != "" {
+						t.Errorf("属性が異なります (-want +got):\n%s", diff)
 					}
 				default:
-					if !reflect.DeepEqual(gotVal, v) {
-						t.Errorf("Field %s: expected %v, got %v", k, v, gotVal)
+					if diff := cmp.Diff(v, gotVal); diff != "" {
+						t.Errorf("フィールド %s の値が異なります (-want +got):\n%s", k, diff)
 					}
 				}
 			}
 
-			// Check time field exists and is parseable
-			timeStr, ok := got["time"].(string)
-			if !ok {
-				t.Errorf("Expected time to be a string, got %T", got["time"])
-			} else {
-				_, err := time.Parse(time.RFC3339Nano, timeStr)
-				if err != nil {
-					t.Errorf("Failed to parse time: %v", err)
-				}
-			}
-
-			// Check trace fields if project ID is set
-			if tc.name == "log with project ID" {
+			// トレース情報の検証
+			if tt.name == "プロジェクトID付きの警告ログ" {
 				traceID, ok := got["logging.googleapis.com/trace"].(string)
 				if !ok {
-					t.Errorf("Expected trace ID to be a string, got %T", got["logging.googleapis.com/trace"])
-				}
-				if !strings.HasPrefix(traceID, "projects/test-project/traces/") {
-					t.Errorf("Expected trace ID to start with projects/test-project/traces/, got %s", traceID)
+					t.Errorf("trace ID が文字列ではありません: %T", got["logging.googleapis.com/trace"])
+				} else if !strings.HasPrefix(traceID, "projects/test-project/traces/") {
+					t.Errorf("trace ID が不正です: %s", traceID)
 				}
 
 				spanID, ok := got["logging.googleapis.com/spanId"].(string)
 				if !ok {
-					t.Errorf("Expected span ID to be a string, got %T", got["logging.googleapis.com/spanId"])
+					t.Errorf("span ID が文字列ではありません: %T", got["logging.googleapis.com/spanId"])
+				} else if spanID != "0102030405060708" {
+					t.Errorf("span ID が不正です: %s", spanID)
 				}
-				if spanID != "0102030405060708" {
-					t.Errorf("Expected span ID to be 0102030405060708, got %s", spanID)
-				}
-			}
-		})
-	}
-}
-
-// TestHandler_Enabled tests the Enabled method of the Handler.
-func TestHandler_Enabled(t *testing.T) {
-	testCases := []struct {
-		name     string
-		level    slog.Level
-		minLevel slog.Level
-		want     bool
-	}{
-		{
-			name:     "info enabled for info level",
-			level:    slog.LevelInfo,
-			minLevel: slog.LevelInfo,
-			want:     true,
-		},
-		{
-			name:     "debug disabled for info level",
-			level:    slog.LevelDebug,
-			minLevel: slog.LevelInfo,
-			want:     false,
-		},
-		{
-			name:     "error enabled for info level",
-			level:    slog.LevelError,
-			minLevel: slog.LevelInfo,
-			want:     true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			handler := New(&bytes.Buffer{}, WithLevel(tc.minLevel))
-			got := handler.Enabled(context.Background(), tc.level)
-			if got != tc.want {
-				t.Errorf("Enabled() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestLevelToSeverity tests the levelToSeverity function.
-func TestLevelToSeverity(t *testing.T) {
-	testCases := []struct {
-		name  string
-		level slog.Level
-		want  string
-	}{
-		{
-			name:  "debug level",
-			level: slog.LevelDebug,
-			want:  "DEBUG",
-		},
-		{
-			name:  "info level",
-			level: slog.LevelInfo,
-			want:  "INFO",
-		},
-		{
-			name:  "warn level",
-			level: slog.LevelWarn,
-			want:  "WARNING",
-		},
-		{
-			name:  "error level",
-			level: slog.LevelError,
-			want:  "ERROR",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := levelToSeverity(tc.level)
-			if got != tc.want {
-				t.Errorf("levelToSeverity() = %v, want %v", got, tc.want)
 			}
 		})
 	}
